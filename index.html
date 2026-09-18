@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>誕生日検索アプリ</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+  body{
+    font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    background: #fafafa;
+    padding: 20px;
+    text-align: center;
+  }
+  #box{
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    max-width: 600px;
+    margin: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  select{
+    font-size: 22px;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 10px;
+  }
+  button{
+    font-size: 22px;
+    padding: 12px 20px;
+    background: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  #result{
+    margin-top: 20px;
+    font-size: 20px;
+    text-align: left;
+    padding: 20px;
+    border-radius: 12px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>誕生日検索アプリ</h1>
+
+<div id="box">
+  <p>誕生日（月日）を選んでください</p>
+
+  <select id="month"><option value="">月</option></select>
+  <select id="day"><option value="">日</option></select>
+
+  <br>
+  <button onclick="searchBirthday()">実行</button>
+
+  <div id="result"></div>
+</div>
+
+<script>
+const monthSelect = document.getElementById("month");
+const daySelect = document.getElementById("day");
+const resultDiv = document.getElementById("result");
+
+// 月の生成
+for(let m = 1; m <= 12; m++){
+  monthSelect.innerHTML += `<option value="${m}">${m}月</option>`;
+}
+
+// 月変更時に日数を動的に生成
+function updateDays() {
+  const m = Number(monthSelect.value);
+  daySelect.innerHTML = '<option value="">日</option>';
+  if(!m) return;
+
+  // 各月の日数（2月はうるう年を考慮して29日まで選択可能に）
+  const daysInMonth = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maxDay = daysInMonth[m];
+
+  for(let d = 1; d <= maxDay; d++){
+    daySelect.innerHTML += `<option value="${d}">${d}日</option>`;
+  }
+}
+
+monthSelect.addEventListener("change", updateDays);
+
+/* 正確な星座判定 */
+function getZodiac(month, day){
+  const dateNum = month * 100 + day;
+  if ((dateNum >= 1222 && dateNum <= 1231) || (dateNum >= 101 && dateNum <= 119)) return "山羊座";
+  if (dateNum >= 120 && dateNum <= 218) return "水瓶座";
+  if (dateNum >= 219 && dateNum <= 320) return "魚座";
+  if (dateNum >= 321 && dateNum <= 419) return "牡羊座";
+  if (dateNum >= 420 && dateNum <= 520) return "牡牛座";
+  if (dateNum >= 521 && dateNum <= 621) return "双子座";
+  if (dateNum >= 622 && dateNum <= 722) return "蟹座";
+  if (dateNum >= 723 && dateNum <= 822) return "獅子座";
+  if (dateNum >= 823 && dateNum <= 922) return "乙女座";
+  if (dateNum >= 923 && dateNum <= 1023) return "天秤座";
+  if (dateNum >= 1024 && dateNum <= 1122) return "蠍座";
+  if (dateNum >= 1123 && dateNum <= 1221) return "射手座";
+  return "不明";
+}
+
+/* 性格診断 */
+function getBirthdayPersonality(month, day){
+  const key = month * 100 + day;
+  if(key % 5 === 0) return "直感が鋭く、新しいことに挑戦するタイプ。";
+  if(key % 3 === 0) return "穏やかで協調性が高く、周囲から信頼されるタイプ。";
+  if(key % 2 === 0) return "論理的で計画性があるタイプ。";
+  return "創造力が豊かで芸術的なセンスがあるタイプ。";
+}
+
+/* ラッキーカラー・アイテム */
+function getLucky(month, day){
+  const colors = ["red", "blue", "green", "purple", "yellow", "black", "white", "pink", "orange", "skyblue"];
+  const items  = ["本", "時計", "ペン", "財布", "帽子", "コーヒー", "花", "ノート", "お守り", "キャンドル"];
+  const index = (month + day) % 10;
+  return { color: colors[index], item: items[index] };
+}
+
+/* 指定した見出しの次のリスト要素を安全に取得するヘルパー関数 */
+function getListAfterHeader(doc, headerKeyword) {
+  const headers = [...doc.querySelectorAll("h2, h3")];
+  const targetHeader = headers.find(h => h.textContent.includes(headerKeyword));
+  if (!targetHeader) return [];
+
+  let next = targetHeader.nextElementSibling;
+  while (next) {
+    if (next.tagName === "UL") {
+      return [...next.querySelectorAll("li")].map(li => li.textContent);
+    }
+    // 子要素にulがある場合
+    const ul = next.querySelector("ul");
+    if (ul) {
+      return [...ul.querySelectorAll("li")].map(li => li.textContent);
+    }
+    // 次の見出しに到達したら探索終了
+    if (next.tagName === "H2" || next.tagName === "H3") break;
+    next = next.nextElementSibling;
+  }
+  return [];
+}
+
+/* Wikipedia HTML API を使う（CORS対応済み） */
+async function searchBirthday(){
+  const m = Number(monthSelect.value);
+  const d = Number(daySelect.value);
+
+  if(!m || !d){
+    alert("月日を選んでください");
+    return;
+  }
+
+  const url = `https://ja.wikipedia.org/api/rest_v1/page/html/${m}月${d}日`;
+  resultDiv.innerHTML = "検索中…";
+  resultDiv.style.background = "transparent";
+
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error("Network response was not ok");
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // 「誕生日」と「できごと」のリストを取得
+    const persons = getListAfterHeader(doc, "誕生日");
+    const events = getListAfterHeader(doc, "できごと");
+
+    // 占い
+    const zodiac = getZodiac(m, d);
+    const personality = getBirthdayPersonality(m, d);
+    const lucky = getLucky(m, d);
+
+    // 出力
+    resultDiv.innerHTML = "";
+
+    resultDiv.innerHTML += "<h2>同じ誕生日の人物</h2>";
+    persons.length ? persons.forEach(p => resultDiv.innerHTML += `<p>${p}</p>`)
+                   : resultDiv.innerHTML += "<p>該当なし</p>";
+
+    resultDiv.innerHTML += "<h2>この日の出来事</h2>";
+    events.length ? events.forEach(e => resultDiv.innerHTML += `<p>${e}</p>`)
+                  : resultDiv.innerHTML += "<p>該当なし</p>";
+
+    resultDiv.innerHTML += `
+      <h2>誕生日占い</h2>
+      <p><strong>星座：</strong> ${zodiac}</p>
+      <p><strong>性格診断：</strong> ${personality}</p>
+      <p><strong>ラッキーカラー：</strong> ${lucky.color}</p>
+      <p><strong>ラッキーアイテム：</strong> ${lucky.item}</p>
+    `;
+
+    // ラッキーカラー背景反映
+    resultDiv.style.background = lucky.color + "33";
+
+  }catch(e){
+    resultDiv.innerHTML = "<p>検索エラーが発生しました。インターネット接続を確認してください。</p>";
+  }
+}
+
+/* PWA Service Worker */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+
+</body>
+</html>
